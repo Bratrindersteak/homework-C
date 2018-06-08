@@ -7,10 +7,21 @@
 #include<sys/socket.h>  
 #include<sys/wait.h>  
   
-#define PORT 1500//端口号   
-#define BACKLOG 5/*最大监听数*/   
+#define PORT 1500//端口号
+#define BACKLOG 5/*最大监听数*/
+#define FILE_NAME "thing.txt"
   
-int main(){  
+int main(){
+  FILE *fp;
+  int file_size;
+
+  fp = fopen(FILE_NAME, "r");
+  fseek(fp, 0, SEEK_END);
+  file_size = ftell(fp);
+  fclose(fp);
+
+  printf("file_size: %d %ld", file_size, sizeof(file_size));
+
     int sockfd,new_fd;/*socket句柄和建立连接后的句柄*/  
     struct sockaddr_in my_addr;/*本方地址信息结构体，下面有具体的属性赋值*/  
     struct sockaddr_in their_addr;/*对方地址信息*/  
@@ -40,7 +51,7 @@ int main(){
         printf("receive failed");  
       } else {
         printf("receive success");  
-        send(new_fd,"Hello World!",12,0);//发送内容，参数分别是连接句柄，内容，大小，其他信息（设为0即可）   
+        send(new_fd, "80", sizeof(file_size), 0);//发送内容，参数分别是连接句柄，内容，大小，其他信息（设为0即可）   
       }  
     }  
     return 0;  
