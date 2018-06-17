@@ -8,18 +8,18 @@
 每个成员启动的时候，都需要向集群中询问：谁是服务器；在服务器响应以后，向服务器发送申请NodeID的命令字：
 
 1. 编写两个程序，一个作为服务器，一个作为Client，采用Raw Socket进行通讯通讯的内容格式：
-  ```
-  struct DATA_PROTO
-  {
-    unsigned int dwGroupID;      // 为命令启动时输出的参数 grp_ID
-    unsigned int dwRequestTime;  // 数据包发送时距离1970年1月1日零点的秒钟数
-    unsigned short wGroupCmd;    // 0x0FF0时，寻找group中已经存在的服务器，此时，该数据包应该为一个广播包，也就是说：LLC中的目的MAC为0xFFFFFFFFFFFF
-                                  // 0x0F01时，成员向服务器申请自己合法的NodeID，服务器按顺序发放
-                                  // 0x00F0时，为服务器响应成员的数据包，告知自己为group中的服务器
-                                  // 0x0001时，为服务器发放给成员的NodeID响应包
-    unsigned short wNodeID;
-  }
-  ```
+    ```
+    struct DATA_PROTO
+    {
+      unsigned int dwGroupID; // 为命令启动时输出的参数 grp_ID
+      unsigned int dwRequestTime; // 数据包发送时距离1970年1月1日零点的秒钟数
+      unsigned short wGroupCmd; // 0x0FF0时，寻找group中已经存在的服务器，此时，该数据包应该为一个广播包，也就是说：LLC中的目的MAC为0xFFFFFFFFFFFF
+                                // 0x0F01时，成员向服务器申请自己合法的NodeID，服务器按顺序发放
+                                // 0x00F0时，为服务器响应成员的数据包，告知自己为group中的服务器
+                                // 0x0001时，为服务器发放给成员的NodeID响应包
+      unsigned short wNodeID;
+    }
+    ```
   这些数据传输需要可以通过wireshark捕获
   甚至wireshark可以帮助调试
   
