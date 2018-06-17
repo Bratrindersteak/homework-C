@@ -31,6 +31,7 @@ int main(int argc, char **argv)
   unsigned long long fileSize;
   unsigned long long reader;
   int ii;
+  int times;
   char *buf;
   int sockfd,new_fd; //socket句柄和建立连接后的句柄
   struct sockaddr_in my_addr; //本方地址信息结构体，下面有具体的属性赋值
@@ -48,6 +49,7 @@ int main(int argc, char **argv)
   fileInfo.fileSize = fileSize;
   fseek(fp, 0, SEEK_SET);
   buf = (char *)malloc(fileSize);
+  times = (int)(fileSize / BUF_SIZE) + 1;
   reader = fread(buf, 1, fileSize, fp);
 
   //printf("fileSize: %lld", fileSize);
