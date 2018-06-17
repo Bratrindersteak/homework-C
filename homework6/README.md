@@ -20,7 +20,6 @@
       unsigned short wNodeID;
     }
     ```
-  这些数据传输需要可以通过wireshark捕获
-  甚至wireshark可以帮助调试
+    这些数据传输需要可以通过wireshark捕获，甚至wireshark可以帮助调试
   
 2. 试图将服务器端和成员端的程序合成为一个程序，在程序启动的时候，增加一个参数，标明自己是服务器还是成员.
