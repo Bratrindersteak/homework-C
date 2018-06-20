@@ -2,6 +2,7 @@
 // gcc grp_server.c -o grp_server
 // ./grp_server <grp_ID>
 //
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -15,6 +16,9 @@
 #include <fcntl.h>
 #include <sys/shm.h>
 #include <time.h>
+#include <net/if.h>
+#include <linux/if_packet.h>
+#include <netinet/if_ether.h>
 
 struct DATA_PROTO
 {
@@ -45,8 +49,8 @@ int main (int argc, char **argv)
 	}
 	printf("(int *s)argv[1]: %ls\n", (int *)argv[1]);
 
-  sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
-  // sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+  // sockfd = socket(PF_PACKET, SOCK_RAW, 0);
   printf("sockfd: %d\n", sockfd);
   if (sockfd == -1)
   {
