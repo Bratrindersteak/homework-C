@@ -45,17 +45,15 @@ int main (int argc, char **argv)
 	}
 	printf("(int *s)argv[1]: %ls\n", (int *)argv[1]);
 
-  printf("IPPROTO_ICMP: %d\n", IPPROTO_ICMP);
-  sockfd = socket(AF_LOCAL, SOCK_RAW, IPPROTO_ICMP);
-  // sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+  sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
   // sockfd = socket(AF_INET, SOCK_STREAM, 0);
   printf("sockfd: %d\n", sockfd);
   if (sockfd == -1)
   {
-    printf("sockfd error\n");
+    printf("create socket error\n");
     return -1;
   }
-
+  
   printf("so...,the next~\n");
 
 	return 0;
