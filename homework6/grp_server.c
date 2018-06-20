@@ -30,7 +30,9 @@ int main (int argc, char **argv)
   struct DATA_PROTO sendInfo;
 
   // sendInfo.dwGroupID = (int *)&argv[1];
+  sendInfo.dwGroupID = 0x1234;
   // strcpy(sendInfo.dwGroupID, argv[1]);
+  printf("sendInfo.dwGroupID: %d\n", sendInfo.dwGroupID);
 
   time_t t;
   sendInfo.dwRequestTimes = time(&t);
