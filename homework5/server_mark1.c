@@ -45,6 +45,7 @@ int main(int argc, char **argv)
   fp = fopen(argv[1], "r");
   fseek(fp, 0, SEEK_END);
   fileSize = ftell(fp);
+  // printf("fileSizefileSizefileSize: %lld\n", fileSize);
   fileInfo.fileSize = fileSize;
   fseek(fp, 0, SEEK_SET);
   buf = (char *)malloc(fileSize);
