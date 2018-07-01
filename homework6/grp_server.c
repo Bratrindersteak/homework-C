@@ -39,21 +39,32 @@ struct DATA_PROTO
 
 int main (int argc, char **argv)
 {
+  int ii;
 	int sockfd;
   int dwLocalIfIndex;
+  int recvPackage;
   unsigned int dwGroupID;
-  struct LLC_PROTO *llcInfo;
-  struct DATA_PROTO *contentInfo;
   struct ifreq buffer;
   unsigned char broadcastAddr[6];
   unsigned char pLocalMAC[6];
   struct timeval tvNetTimeout={3, 0};
   struct sockaddr_ll devSend;
-  char *interfaceName = "wlp112s0";
-  // char *interfaceName = "wlp3s0";
-  char sendBuf[128];
-  
-  bzero(&sendBuf, sizeof(sendBuf));
+  // char *interfaceName = "wlp112s0";
+  char *interfaceName = "wlp3s0";
+  struct LLC_PROTO *sendLLC;
+  struct DATA_PROTO *sendContent;
+  struct LLC_PROTO *recvLLC;
+  struct DATA_PROTO *recvContent;
+  char pSendBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
+  char pRecvBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
+
+  sendLLC = (struct LLC_PROTO *)(&pSendBuf[0]);
+  sendContent = (struct DATA_PROTO *)(&pSendBuf[14]);
+  recvLLC = (struct LLC_PROTO *)(&pRecvBuf[0]);
+  recvContent = (struct DATA_PROTO *)(&pRecvBuf[14]);
+
+  sendContent->wNodeID = -1;
+
   sscanf(argv[1], "%x", &dwGroupID);
   time_t t;
 
@@ -95,28 +106,22 @@ int main (int argc, char **argv)
     printf("INFO : IfIndex = %d\n", dwLocalIfIndex);
   }
 
-  llcInfo = (struct LLC_PROTO *)(&sendBuf[0]);
   broadcastAddr[0] = 0xff;
   broadcastAddr[1] = 0xff;
   broadcastAddr[2] = 0xff;
   broadcastAddr[3] = 0xff;
   broadcastAddr[4] = 0xff;
   broadcastAddr[5] = 0xff;
-  memcpy((void *)llcInfo->destMacAddr, (void *)broadcastAddr, 6);
-  memcpy((void *)llcInfo->srcMacAddr, (void *)pLocalMAC, 6);
-  llcInfo->protocolNo = 0x9876;
-  // printf("llcInfo->destMacAddr: %012x\n", (int *)(&llcInfo->destMacAddr));
-  // printf("llcInfo->srcMacAddr: %012x\n", (int *)(&llcInfo->srcMacAddr));
-  printf("llcInfo->protocolNo: %04x\n", llcInfo->protocolNo);
-
-  contentInfo = (struct DATA_PROTO *)(&sendBuf[14]);
-  contentInfo->dwGroupID = dwGroupID;
-  // contentInfo->dwRequestTimes = 123456789;
-  contentInfo->dwRequestTimes = time(&t);
-  contentInfo->wGroupCmd = 0x0FF0;
-  printf("contentInfo->dwGroupID: %04x\n", contentInfo->dwGroupID);
-  printf("contentInfo->dwRequestTimes: %08x\n", contentInfo->dwRequestTimes);
-  printf("contentInfo->wGroupCmd: %04x\n", contentInfo->wGroupCmd);
+  memcpy((void *)sendLLC->destMacAddr, (void *)broadcastAddr, 6);
+  memcpy((void *)sendLLC->srcMacAddr, (void *)pLocalMAC, 6);
+  sendLLC->protocolNo = 0x7698;
+  sendContent->dwGroupID = dwGroupID;
+  // sendContent->dwRequestTimes = 123456789;
+  sendContent->dwRequestTimes = time(&t);
+  sendContent->wGroupCmd = 0x0FF0;
+  printf("sendContent->dwGroupID: %04x\n", sendContent->dwGroupID);
+  printf("sendContent->dwRequestTimes: %08x\n", sendContent->dwRequestTimes);
+  printf("sendContent->wGroupCmd: %04x\n", sendContent->wGroupCmd);
 
   bzero(&devSend, sizeof(devSend));
   devSend.sll_family = AF_PACKET;
@@ -124,8 +129,54 @@ int main (int argc, char **argv)
   devSend.sll_halen = htons(6);
   devSend.sll_ifindex = dwLocalIfIndex; // This need to be CAUSED !!!
 
-  int sendMsg = sendto(sockfd, (char *)&sendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
+  int sendMsg = sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
   printf("sendMsg: %d\n", sendMsg);
+
+  // recv package.
+  while (recvLLC->protocolNo != 0x7698) {
+    printf("recvLLC->protocolNo: %04x\n", recvLLC->protocolNo);
+    recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
+    if (recvPackage == -1)
+    {
+      printf("ERROR : Can NOT receive package !!!\n");
+      return -1;
+    }
+  }
+
+  int mac = 0;
+  for (ii = 0; ii < sizeof(pLocalMAC); ii++)
+  {
+    if (recvLLC->srcMacAddr[ii] == pLocalMAC[ii])
+    {
+      mac += 1;
+    }
+  }
+  printf("sizeof(pLocalMAC): %ld\n", sizeof(pLocalMAC));
+  printf("mac: %d\n", mac);
+
+  // Master is already exist.
+  if (recvContent->wGroupCmd == 0x00F0)
+  {
+    printf("ERROR : Unfortunately, the Master is already exist, you are finished here !!!\n");
+  }
+
+  // Broadcast looking for Master.
+  if (recvContent->wGroupCmd == 0x0FF0)
+  {
+    printf("INFO : This is a request looking for Master !!!\n");
+    memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
+    sendContent->dwGroupID = dwGroupID;
+    sendContent->dwRequestTimes = time(&t);
+    sendContent->wGroupCmd = 0x00F0;
+
+    int sendMasterRes = sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
+  }
+
+  // wNodeID request from client.
+  if (recvContent->wGroupCmd == 0x0F01)
+  {
+    printf("INFO : This is a request for wNodeID !!!\n");
+  }
 
   close(sockfd);
 
