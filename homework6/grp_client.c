@@ -22,6 +22,8 @@
 #include <time.h>
 #include <errno.h>
 
+#define PRIVATE_PROTOCOL 0x7698
+
 struct LLC_PROTO
 {
   unsigned char destMacAddr[6];
@@ -37,12 +39,15 @@ struct DATA_PROTO
   unsigned short wNodeID;
 };
 
+unsigned int myGroupID;
+int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd);
+
 int main (int argc, char **argv)
 {
   int sockfd;
   int dwLocalIfIndex;
   int recvPackage;
-  unsigned int dwGroupID;
+  int isMyPackage = 0;
   struct ifreq buffer;
   unsigned char broadcastAddr[6];
   unsigned char pLocalMAC[6];
@@ -63,7 +68,9 @@ int main (int argc, char **argv)
   recvLLC = (struct LLC_PROTO *)(&pRecvBuf[0]);
   recvContent = (struct DATA_PROTO *)(&pRecvBuf[14]);
 
-  sscanf(argv[1], "%x", &dwGroupID);
+  sendContent->wNodeID = -1;
+
+  sscanf(argv[1], "%x", &myGroupID);
   time_t t;
 
   if (argv[1] == NULL)
@@ -112,8 +119,8 @@ int main (int argc, char **argv)
   broadcastAddr[5] = 0xff;
   memcpy((void *)sendLLC->destMacAddr, (void *)broadcastAddr, 6);
   memcpy((void *)sendLLC->srcMacAddr, (void *)pLocalMAC, 6);
-  sendLLC->protocolNo = 0x7698;
-  sendContent->dwGroupID = dwGroupID;
+  sendLLC->protocolNo = PRIVATE_PROTOCOL;
+  sendContent->dwGroupID = myGroupID;
   // sendContent->dwRequestTimes = 123456789;
   sendContent->dwRequestTimes = time(&t);
   sendContent->wGroupCmd = 0x0FF0;
@@ -131,32 +138,28 @@ int main (int argc, char **argv)
   printf("sendMsg: %d\n", sendMsg);
 
   // recv package.
-  while (recvLLC->protocolNo != 0x7698) {
-    printf("recvLLC->protocolNo: %04x\n", recvLLC->protocolNo);
+  while (!isMyPackage) {
     recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
     if (recvPackage == -1)
     {
       printf("ERROR : Can NOT receive package !!!\n");
       return -1;
     }
-  }
-  printf("recvLLC->srcMacAddr: \n");
-  printf("%02x\n", recvLLC->srcMacAddr[0]);
-  printf("%02x\n", recvLLC->srcMacAddr[1]);
-  printf("%02x\n", recvLLC->srcMacAddr[2]);
-  printf("%02x\n", recvLLC->srcMacAddr[3]);
-  printf("%02x\n", recvLLC->srcMacAddr[4]);
-  printf("%02x\n", recvLLC->srcMacAddr[5]);
-
-  if (recvLLC->srcMacAddr[0] == pLocalMAC[0])
-  {
-    printf("INFO: I recv my broadcast package !!!\n");
+    isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
   }
 
   // Found the Master.
   if (recvContent->wGroupCmd == 0x00F0)
   {
     printf("INFO : Response from The Master !!!\n");
+    memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
+    time_t t;
+    sendContent->dwRequestTimes = time(&t);
+    sendContent->wGroupCmd = 0x0F01;
+    if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+    {
+      printf("ERROR : Can NOT send wNodeID apply package !!!\n");
+    }
   }
 
   // Recv wNodeID.
@@ -168,4 +171,24 @@ int main (int argc, char **argv)
   close(sockfd);
 
   return 0;
+}
+
+int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd)
+{
+  if (protocolNo != PRIVATE_PROTOCOL)
+  {
+    return 0;
+  }
+
+  if (dwGroupID != myGroupID)
+  {
+    return 0;
+  }
+
+  if (wGroupCmd != 0x00F0 && wGroupCmd != 0x0001)
+  {
+    return 0;
+  }
+
+  return 1;
 }
