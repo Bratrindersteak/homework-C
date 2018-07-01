@@ -137,35 +137,40 @@ int main (int argc, char **argv)
   int sendMsg = sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
   printf("sendMsg: %d\n", sendMsg);
 
-  // recv package.
-  while (!isMyPackage) {
-    recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
-    if (recvPackage == -1)
-    {
-      printf("ERROR : Can NOT receive package !!!\n");
-      return -1;
-    }
-    isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
-  }
-
-  // Found the Master.
-  if (recvContent->wGroupCmd == 0x00F0)
+  while (1)
   {
-    printf("INFO : Response from The Master !!!\n");
-    memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
-    time_t t;
-    sendContent->dwRequestTimes = time(&t);
-    sendContent->wGroupCmd = 0x0F01;
-    if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
-    {
-      printf("ERROR : Can NOT send wNodeID apply package !!!\n");
+    // recv package.
+    while (!isMyPackage) {
+      recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
+      if (recvPackage == -1)
+      {
+        printf("ERROR : Can NOT receive package !!!\n");
+        return -1;
+      }
+      isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
     }
-  }
 
-  // Recv wNodeID.
-  if (recvContent->wGroupCmd == 0x0001)
-  {
-    printf("INFO : Recv the wNodeID from Master !!!\n");
+    // Found the Master.
+    if (recvContent->wGroupCmd == 0x00F0)
+    {
+      printf("INFO : Response from The Master !!!\n");
+      memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
+      time_t t;
+      sendContent->dwRequestTimes = time(&t);
+      sendContent->wGroupCmd = 0x0F01;
+      if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+      {
+        printf("ERROR : Can NOT send wNodeID apply package !!!\n");
+      }
+    }
+
+    // Recv wNodeID.
+    if (recvContent->wGroupCmd == 0x0001)
+    {
+      printf("INFO : Recv the wNodeID from Master !!!\n");
+      printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
+      break;
+    }
   }
 
   close(sockfd);

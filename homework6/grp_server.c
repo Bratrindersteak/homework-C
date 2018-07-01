@@ -49,6 +49,7 @@ int main (int argc, char **argv)
   int dwLocalIfIndex;
   int recvPackage;
   int isMyPackage = 0;
+  int wNodeID = 0;
   struct ifreq buffer;
   unsigned char broadcastAddr[6];
   unsigned char pLocalMAC[6];
@@ -137,53 +138,66 @@ int main (int argc, char **argv)
   int sendMsg = sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
   printf("sendMsg: %d\n", sendMsg);
 
-  // recv package.
-  while (!isMyPackage) {
-    recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
-    if (recvPackage == -1)
-    {
-      printf("ERROR : Can NOT receive package !!!\n");
-      return -1;
+  while (1)
+  {
+    // recv package.
+    while (!isMyPackage) {
+      recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
+      if (recvPackage == -1)
+      {
+        printf("ERROR : Can NOT receive package !!!\n");
+        return -1;
+      }
+      isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
     }
-    isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
-  }
 
-  int mac = 0;
-  for (ii = 0; ii < sizeof(pLocalMAC); ii++)
-  {
-    if (recvLLC->srcMacAddr[ii] == pLocalMAC[ii])
+    int mac = 0;
+    for (ii = 0; ii < sizeof(pLocalMAC); ii++)
     {
-      mac += 1;
+      if (recvLLC->srcMacAddr[ii] == pLocalMAC[ii])
+      {
+        mac += 1;
+      }
     }
-  }
-  printf("sizeof(pLocalMAC): %ld\n", sizeof(pLocalMAC));
-  printf("mac: %d\n", mac);
+    printf("sizeof(pLocalMAC): %ld\n", sizeof(pLocalMAC));
+    printf("mac: %d\n", mac);
 
-  // Master is already exist.
-  if (recvContent->wGroupCmd == 0x00F0)
-  {
-    printf("ERROR : Unfortunately, the Master is already exist, you are finished here !!!\n");
-  }
-
-  // Broadcast looking for Master.
-  if (recvContent->wGroupCmd == 0x0FF0)
-  {
-    printf("INFO : This is a request looking for Master !!!\n");
-    memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
-    time_t t;
-    sendContent->dwRequestTimes = time(&t);
-    sendContent->wGroupCmd = 0x00F0;
-
-    if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+    // Master is already exist.
+    if (recvContent->wGroupCmd == 0x00F0)
     {
-      printf("ERROR : Can NOT send Master reply package !!!\n");
+      printf("ERROR : Unfortunately, the Master is already exist, you are finished here !!!\n");
     }
-  }
 
-  // wNodeID request from client.
-  if (recvContent->wGroupCmd == 0x0F01)
-  {
-    printf("INFO : This is a request for wNodeID !!!\n");
+    // Broadcast looking for Master.
+    if (recvContent->wGroupCmd == 0x0FF0)
+    {
+      printf("INFO : This is a request looking for Master !!!\n");
+      memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
+      time_t t;
+      sendContent->dwRequestTimes = time(&t);
+      sendContent->wGroupCmd = 0x00F0;
+
+      if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+      {
+        printf("ERROR : Can NOT send Master reply package !!!\n");
+      }
+    }
+
+    // wNodeID request from client.
+    if (recvContent->wGroupCmd == 0x0F01)
+    {
+      printf("INFO : This is a request for wNodeID !!!\n");
+      memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
+      time_t t;
+      sendContent->dwRequestTimes = time(&t);
+      sendContent->wGroupCmd = 0x0001;
+      sendContent->wNodeID = wNodeID++;
+
+      if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+      {
+        printf("ERROR : Can NOT send Master reply package !!!\n");
+      }
+    }
   }
 
   close(sockfd);
