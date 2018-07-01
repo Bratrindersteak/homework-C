@@ -22,6 +22,7 @@
 #include <time.h>
 #include <errno.h>
 
+#define MAX_SIZE 1514
 #define PRIVATE_PROTOCOL 0x7698
 
 struct LLC_PROTO
@@ -53,15 +54,15 @@ int main (int argc, char **argv)
   unsigned char pLocalMAC[6];
   struct timeval tvNetTimeout={3, 0};
   struct sockaddr_ll devSend;
-  // char *interfaceName = "wlp112s0";
-  char *interfaceName = "wlp3s0";
+  char *interfaceName = "wlp112s0";
+  // char *interfaceName = "wlp3s0";
   struct LLC_PROTO *sendLLC;
   struct DATA_PROTO *sendContent;
   struct LLC_PROTO *recvLLC;
   struct DATA_PROTO *recvContent;
 
-  char pSendBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
-  char pRecvBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
+  char pSendBuf[MAX_SIZE];
+  char pRecvBuf[MAX_SIZE];
 
   sendLLC = (struct LLC_PROTO *)(&pSendBuf[0]);
   sendContent = (struct DATA_PROTO *)(&pSendBuf[14]);
@@ -171,6 +172,7 @@ int main (int argc, char **argv)
       printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
       break;
     }
+    recvContent->wGroupCmd = -1;
   }
 
   close(sockfd);
