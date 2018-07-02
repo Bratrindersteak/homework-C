@@ -22,6 +22,7 @@
 #include <time.h>
 #include <errno.h>
 
+#define MAX_SIZE 1514
 #define PRIVATE_PROTOCOL 0x7698
 
 struct LLC_PROTO
@@ -49,7 +50,7 @@ int main (int argc, char **argv)
   int dwLocalIfIndex;
   int recvPackage;
   int isMyPackage = 0;
-  int wNodeID = 0;
+  int wNodeID = 1;
   struct ifreq buffer;
   unsigned char broadcastAddr[6];
   unsigned char pLocalMAC[6];
@@ -61,8 +62,8 @@ int main (int argc, char **argv)
   struct DATA_PROTO *sendContent;
   struct LLC_PROTO *recvLLC;
   struct DATA_PROTO *recvContent;
-  char pSendBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
-  char pRecvBuf[sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO)];
+  char pSendBuf[MAX_SIZE];
+  char pRecvBuf[MAX_SIZE];
 
   sendLLC = (struct LLC_PROTO *)(&pSendBuf[0]);
   sendContent = (struct DATA_PROTO *)(&pSendBuf[14]);
@@ -99,8 +100,6 @@ int main (int argc, char **argv)
     memcpy((void *)pLocalMAC, (void *)buffer.ifr_hwaddr.sa_data, 6);
   }
 
-  memset(&buffer, 0x00, sizeof(buffer));
-  strcpy(buffer.ifr_name, interfaceName);
   if (ioctl(sockfd, SIOCGIFINDEX, &buffer) == -1)
   {
     printf("ERROR : Can NOT get the local interface index !!!\n");
@@ -151,17 +150,6 @@ int main (int argc, char **argv)
       isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
     }
 
-    int mac = 0;
-    for (ii = 0; ii < sizeof(pLocalMAC); ii++)
-    {
-      if (recvLLC->srcMacAddr[ii] == pLocalMAC[ii])
-      {
-        mac += 1;
-      }
-    }
-    printf("sizeof(pLocalMAC): %ld\n", sizeof(pLocalMAC));
-    printf("mac: %d\n", mac);
-
     // Master is already exist.
     if (recvContent->wGroupCmd == 0x00F0)
     {
@@ -191,13 +179,15 @@ int main (int argc, char **argv)
       time_t t;
       sendContent->dwRequestTimes = time(&t);
       sendContent->wGroupCmd = 0x0001;
-      sendContent->wNodeID = wNodeID++;
+      sendContent->wNodeID = wNodeID;
 
       if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
       {
         printf("ERROR : Can NOT send Master reply package !!!\n");
       }
+      wNodeID++;
     }
+    isMyPackage = 0;
   }
 
   close(sockfd);

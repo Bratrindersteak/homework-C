@@ -54,8 +54,8 @@ int main (int argc, char **argv)
   unsigned char pLocalMAC[6];
   struct timeval tvNetTimeout={3, 0};
   struct sockaddr_ll devSend;
-  char *interfaceName = "wlp112s0";
-  // char *interfaceName = "wlp3s0";
+  // char *interfaceName = "wlp112s0";
+  char *interfaceName = "wlp3s0";
   struct LLC_PROTO *sendLLC;
   struct DATA_PROTO *sendContent;
   struct LLC_PROTO *recvLLC;
@@ -99,8 +99,6 @@ int main (int argc, char **argv)
     memcpy((void *)pLocalMAC, (void *)buffer.ifr_hwaddr.sa_data, 6);
   }
 
-  memset(&buffer, 0x00, sizeof(buffer));
-  strcpy(buffer.ifr_name, interfaceName);
   if (ioctl(sockfd, SIOCGIFINDEX, &buffer) == -1)
   {
     printf("ERROR : Can NOT get the local interface index !!!\n");
@@ -150,7 +148,7 @@ int main (int argc, char **argv)
       }
       isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
     }
-
+    
     // Found the Master.
     if (recvContent->wGroupCmd == 0x00F0)
     {
@@ -172,7 +170,7 @@ int main (int argc, char **argv)
       printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
       break;
     }
-    recvContent->wGroupCmd = -1;
+    isMyPackage = 0;
   }
 
   close(sockfd);
