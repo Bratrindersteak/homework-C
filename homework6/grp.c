@@ -163,8 +163,15 @@ int main (int argc, char **argv)
       isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
     }
 
+    printf("argv[2]: %s\n", argv[2]);
+    printf("masterStatus: %s\n", masterStatus);
+    printf("workerStatus: %s\n", workerStatus);
+    printf("strcmp(argv[2], masterStatus) == 0 : %d\n", strcmp(argv[2], masterStatus) == 0);
+    printf("strcmp(argv[2], workerStatus) == 0 : %d\n", strcmp(argv[2], workerStatus) == 0);
+
     if (strcmp(argv[2], masterStatus) == 0)
     {
+      printf("INFO: This is Master package !!!\n");
       // Master is already exist.
       if (recvContent->wGroupCmd == 0x00F0)
       {
@@ -206,6 +213,7 @@ int main (int argc, char **argv)
 
     if (strcmp(argv[2], workerStatus) == 0)
     {
+      printf("INFO: This is Worker package !!!\n");
       // Found the Master.
       if (recvContent->wGroupCmd == 0x00F0)
       {
@@ -225,7 +233,7 @@ int main (int argc, char **argv)
       {
         printf("INFO : Recv the wNodeID from Master !!!\n");
         printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
-        break;
+        // break;
       }
     }
     isMyPackage = 0;
