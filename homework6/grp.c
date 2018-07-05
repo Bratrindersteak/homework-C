@@ -44,6 +44,7 @@ unsigned char masterStatus[2];
 unsigned char workerStatus[2];
 unsigned int myGroupID;
 int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd);
+int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd);
 
 int main (int argc, char **argv)
 {
@@ -58,8 +59,8 @@ int main (int argc, char **argv)
   unsigned char pLocalMAC[6];
   struct timeval tvNetTimeout={3, 0};
   struct sockaddr_ll devSend;
-  // char *interfaceName = "wlp112s0";
-  char *interfaceName = "wlp3s0";
+  char *interfaceName = "wlp112s0";
+  // char *interfaceName = "wlp3s0";
   struct LLC_PROTO *sendLLC;
   struct DATA_PROTO *sendContent;
   struct LLC_PROTO *recvLLC;
@@ -160,7 +161,16 @@ int main (int argc, char **argv)
         printf("ERROR : Can NOT receive package !!!\n");
         return -1;
       }
-      isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
+
+      if (strcmp(argv[2], masterStatus) == 0)
+      {
+        isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
+      }
+
+      if (strcmp(argv[2], workerStatus) == 0)
+      {
+        isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
+      }
     }
 
     printf("argv[2]: %s\n", argv[2]);
@@ -256,6 +266,26 @@ int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd)
   }
 
   if (wGroupCmd != 0x0FF0 && wGroupCmd != 0x0F01)
+  {
+    return 0;
+  }
+
+  return 1;
+}
+
+int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd)
+{
+  if (protocolNo != PRIVATE_PROTOCOL)
+  {
+    return 0;
+  }
+
+  if (dwGroupID != myGroupID)
+  {
+    return 0;
+  }
+
+  if (wGroupCmd != 0x00F0 && wGroupCmd != 0x0001)
   {
     return 0;
   }
