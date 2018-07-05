@@ -1,6 +1,6 @@
 //
-// gcc grp.c -o grp
-// ./grp <grp_ID> <status>
+// gcc grp_pthread.c -o grp_pthread
+// ./grp_pthread <grp_ID> <status>
 //
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -21,9 +21,13 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #define MAX_SIZE 1514
 #define PRIVATE_PROTOCOL 0x7698
+
+sem_t message_sem;
 
 struct LLC_PROTO
 {
@@ -46,8 +50,31 @@ unsigned int myGroupID;
 int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd);
 int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd);
 
+void *send_func(void *arg)
+{
+
+}
+
+void *recv_func(void *arg)
+{
+
+}
+
 int main (int argc, char **argv)
 {
+  sem_init(&message_sem, 0, 0);
+
+  pthread_t send_pthread;
+  pthread_t recv_pthread;
+
+  pthread_create(&send_pthread, NULL, send_func, NULL);
+  pthread_create(&recv_pthread, NULL, recv_func, NULL);
+  
+  pthread_join(send_pthread, NULL);
+  pthread_join(recv_pthread, NULL);
+
+  sem_destroy(&message_sem);
+
   int ii;
 	int sockfd;
   int dwLocalIfIndex;

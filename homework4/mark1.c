@@ -1,3 +1,7 @@
+//
+// gcc mark1.c -lpthread -o mark1
+// ./mark1
+//
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -78,8 +82,8 @@ void *apprentice_func(void *arg)  // 徒弟线程方法.
     }
 }
 
-
-int main () {
+int main ()
+{
   sem_init(&morra_sem, 0, 0);
 
   pthread_t master_pthread;
