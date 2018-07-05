@@ -59,8 +59,8 @@ int main (int argc, char **argv)
   unsigned char pLocalMAC[6];
   struct timeval tvNetTimeout={3, 0};
   struct sockaddr_ll devSend;
-  char *interfaceName = "wlp112s0";
-  // char *interfaceName = "wlp3s0";
+  // char *interfaceName = "wlp112s0";
+  char *interfaceName = "wlp3s0";
   struct LLC_PROTO *sendLLC;
   struct DATA_PROTO *sendContent;
   struct LLC_PROTO *recvLLC;
@@ -243,7 +243,7 @@ int main (int argc, char **argv)
       {
         printf("INFO : Recv the wNodeID from Master !!!\n");
         printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
-        // break;
+        break;
       }
     }
     isMyPackage = 0;
