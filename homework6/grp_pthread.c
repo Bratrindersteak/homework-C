@@ -1,5 +1,5 @@
 //
-// gcc grp_pthread.c -o grp_pthread
+// gcc grp_pthread.c -lpthread -o grp_pthread
 // ./grp_pthread <grp_ID> <status>
 //
 #define _GNU_SOURCE
@@ -27,7 +27,8 @@
 #define MAX_SIZE 1514
 #define PRIVATE_PROTOCOL 0x7698
 
-sem_t message_sem;
+sem_t sem_send;
+sem_t sem_recv;
 
 struct LLC_PROTO
 {
@@ -47,36 +48,38 @@ struct DATA_PROTO
 unsigned char masterStatus[2];
 unsigned char workerStatus[2];
 unsigned int myGroupID;
+unsigned int status;
 int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd);
 int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd);
+int dwExit = 1;
+int node_ID = 1;
 
-void *send_func(void *arg)
+void *send_func(&sendLLC, &sendContent)
 {
-
+  while (dwExit != 0)
+  {
+    sem_wait(&sem_send);
+    sendContent->dwRequestTimes = time(&t);
+    sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
+  }
 }
 
-void *recv_func(void *arg)
+void *recv_func(sockfd, &recvLLC, &recvContent)
 {
+  while (dwExit != 0)
+  {
+    recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
 
+    if (recvLLC->protocolNo == PRIVATE_PROTOCOL && recvContent->dwGroupID = myGroupID)
+    {
+      sem_post(&sem_recv);
+    }
+  }
 }
 
 int main (int argc, char **argv)
 {
-  sem_init(&message_sem, 0, 0);
-
-  pthread_t send_pthread;
-  pthread_t recv_pthread;
-
-  pthread_create(&send_pthread, NULL, send_func, NULL);
-  pthread_create(&recv_pthread, NULL, recv_func, NULL);
-  
-  pthread_join(send_pthread, NULL);
-  pthread_join(recv_pthread, NULL);
-
-  sem_destroy(&message_sem);
-
-  int ii;
-	int sockfd;
+  int sockfd;
   int dwLocalIfIndex;
   int recvPackage;
   int isMyPackage = 0;
@@ -95,32 +98,29 @@ int main (int argc, char **argv)
   char pSendBuf[MAX_SIZE];
   char pRecvBuf[MAX_SIZE];
 
-  strcpy(masterStatus, "1");
-  strcpy(workerStatus, "0");
-
-  if (strcmp(argv[2], masterStatus) == 0)
-  {
-    printf("INFO: This is Master !!!\n");
-  }
-
-  if (strcmp(argv[2], workerStatus) == 0)
-  {
-    printf("INFO: This is Worker !!!\n");
-  }
-
   sendLLC = (struct LLC_PROTO *)(&pSendBuf[0]);
   sendContent = (struct DATA_PROTO *)(&pSendBuf[14]);
   recvLLC = (struct LLC_PROTO *)(&pRecvBuf[0]);
   recvContent = (struct DATA_PROTO *)(&pRecvBuf[14]);
   sendContent->wNodeID = -1;
   sscanf(argv[1], "%x", &myGroupID);
+  sscanf(argv[2], "%d", &status);
   time_t t;
 
-	if (argv[1] == NULL)
-	{
+  sem_init(&sem_send, 0, 0);
+  sem_init(&sem_recv, 0, 0);
+
+  pthread_t send_pthread;
+  pthread_t recv_pthread;
+
+  pthread_create(&send_pthread, NULL, send_func, &sendLLC, &sendContent);
+  pthread_create(&recv_pthread, NULL, recv_func, sockfd, &recvLLC, &recvContent);
+
+  if (argv[1] == NULL)
+  {
     printf("grp_ID is %s\n", argv[1]);
     return -1;
-	}
+  }
 
   sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
   if (sockfd == -1)
@@ -162,7 +162,6 @@ int main (int argc, char **argv)
   memcpy((void *)sendLLC->srcMacAddr, (void *)pLocalMAC, 6);
   sendLLC->protocolNo = PRIVATE_PROTOCOL;
   sendContent->dwGroupID = myGroupID;
-  // sendContent->dwRequestTimes = 123456789;
   sendContent->dwRequestTimes = time(&t);
   sendContent->wGroupCmd = 0x0FF0;
   printf("sendContent->dwGroupID: %04x\n", sendContent->dwGroupID);
@@ -175,106 +174,57 @@ int main (int argc, char **argv)
   devSend.sll_halen = htons(6);
   devSend.sll_ifindex = dwLocalIfIndex; // This need to be CAUSED !!!
 
-  int sendMsg = sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
-  printf("sendMsg: %d\n", sendMsg);
-
-  while (1)
+  sem_post(&sem_send);
+  while (dwExit != 0)
   {
-    // recv package.
-    while (!isMyPackage) {
-      recvPackage = recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
-      if (recvPackage == -1)
-      {
-        printf("ERROR : Can NOT receive package !!!\n");
-        return -1;
-      }
+    sem_wait(&sem_recv);
 
-      if (strcmp(argv[2], masterStatus) == 0)
-      {
-        isMyPackage = isServerPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
-      }
-
-      if (strcmp(argv[2], workerStatus) == 0)
-      {
-        isMyPackage = isClientPackage(recvLLC->protocolNo, recvContent->dwGroupID, recvContent->wGroupCmd);
-      }
-    }
-
-    printf("argv[2]: %s\n", argv[2]);
-    printf("masterStatus: %s\n", masterStatus);
-    printf("workerStatus: %s\n", workerStatus);
-    printf("strcmp(argv[2], masterStatus) == 0 : %d\n", strcmp(argv[2], masterStatus) == 0);
-    printf("strcmp(argv[2], workerStatus) == 0 : %d\n", strcmp(argv[2], workerStatus) == 0);
-
-    if (strcmp(argv[2], masterStatus) == 0)
+    switch (recvContent->wGroupCmd)
     {
-      printf("INFO: This is Master package !!!\n");
-      // Master is already exist.
-      if (recvContent->wGroupCmd == 0x00F0)
-      {
-        printf("ERROR : Unfortunately, the Master is already exist, you are finished here !!!\n");
-      }
-
-      // Broadcast looking for Master.
-      if (recvContent->wGroupCmd == 0x0FF0)
-      {
-        printf("INFO : This is a request looking for Master !!!\n");
-        memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
-        time_t t;
-        sendContent->dwRequestTimes = time(&t);
-        sendContent->wGroupCmd = 0x00F0;
-
-        if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
+      case 0x0FF0:
+        if (status)
         {
-          printf("ERROR : Can NOT send Master reply package !!!\n");
+          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+          sendContent->wGroupCmd = 0x0F01;
+          sem_post(&&sem_send);
         }
-      }
-
-      // wNodeID request from client.
-      if (recvContent->wGroupCmd == 0x0F01)
-      {
-        printf("INFO : This is a request for wNodeID !!!\n");
-        memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
-        time_t t;
-        sendContent->dwRequestTimes = time(&t);
-        sendContent->wGroupCmd = 0x0001;
-        sendContent->wNodeID = wNodeID;
-
-        if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
-        {
-          printf("ERROR : Can NOT send Master reply package !!!\n");
-        }
-        wNodeID++;
-      }
-    }
-
-    if (strcmp(argv[2], workerStatus) == 0)
-    {
-      printf("INFO: This is Worker package !!!\n");
-      // Found the Master.
-      if (recvContent->wGroupCmd == 0x00F0)
-      {
-        printf("INFO : Response from The Master !!!\n");
-        memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
-        time_t t;
-        sendContent->dwRequestTimes = time(&t);
-        sendContent->wGroupCmd = 0x0F01;
-        if (sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend)) == -1)
-        {
-          printf("ERROR : Can NOT send wNodeID apply package !!!\n");
-        }
-      }
-
-      // Recv wNodeID.
-      if (recvContent->wGroupCmd == 0x0001)
-      {
-        printf("INFO : Recv the wNodeID from Master !!!\n");
-        printf("recvContent->wNodeID: %d\n", recvContent->wNodeID);
         break;
-      }
+      case 0x0F01:
+        if (status)
+        {
+          dwExit = 0;
+        }
+        else
+        {
+          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+          sendContent->wGroupCmd = 0x00F0;
+          sem_post(&&sem_send);
+        }
+        break;
+      case 0x00F0:
+        if (status)
+        {
+          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+          sendContent->wGroupCmd = 0x0001;
+          sendContent->wNodeID = node_ID;
+          sem_post(&sem_send);
+          node_ID++;
+        }
+        break;
+      case 0x0001:
+        if (!status)
+        {
+          dwExit = 0;
+        }
+        break;
     }
-    isMyPackage = 0;
   }
+
+  pthread_join(send_pthread, NULL);
+  pthread_join(recv_pthread, NULL);
+
+  sem_destroy(&sem_send);
+  sem_destroy(&sem_recv);
 
   close(sockfd);
 	return 0;
