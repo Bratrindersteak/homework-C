@@ -1,6 +1,6 @@
 //
-// gcc grp_pthread.c -lpthread -o grp_pthread
-// ./grp_pthread <grp_ID> <status>
+// gcc grp.c -lpthread -o grp
+// ./grp <grp_ID> <status>
 //
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -30,6 +30,24 @@
 sem_t sem_send;
 sem_t sem_recv;
 
+int dwExit = 1;
+int sockfd;
+int dwLocalIfIndex;
+int recvPackage;
+int isMyPackage = 0;
+int wNodeID = 1;
+unsigned int myGroupID;
+unsigned int status;
+struct ifreq buffer;
+struct timeval tvNetTimeout={3, 0};
+struct sockaddr_ll devSend;
+// char *interfaceName = "wlp112s0";
+// char *interfaceName = "wlp3s0";
+char *interfaceName = "enp0s3";
+char pSendBuf[MAX_SIZE];
+char pRecvBuf[MAX_SIZE];
+time_t t;
+
 struct LLC_PROTO
 {
   unsigned char destMacAddr[6];
@@ -45,34 +63,24 @@ struct DATA_PROTO
 	unsigned short wNodeID;
 };
 
-struct SEND_PACKAGE
-{
-  struct LLC_PROTO sendLLC;
-  struct DATA_PROTO sendContent;
-}
-
-struct RECV_PACKAGE
-{
-  struct LLC_PROTO recvLLC;
-  struct DATA_PROTO recvContent;
-}
-
-unsigned char masterStatus[2];
-unsigned char workerStatus[2];
-unsigned int myGroupID;
-unsigned int status;
-int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd);
-int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd);
-int dwExit = 1;
-int node_ID = 1;
+struct LLC_PROTO *sendLLC;
+struct DATA_PROTO *sendContent;
+struct LLC_PROTO *recvLLC;
+struct DATA_PROTO *recvContent;
 
 void *send_func(void *arg)
 {
   while (dwExit != 0)
   {
     sem_wait(&sem_send);
+
+    if (dwExit == 0) {
+    	break;
+    }
+
     sendContent->dwRequestTimes = time(&t);
     sendto(sockfd, (char *)&pSendBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0, (struct sockaddr *)(&devSend), sizeof(devSend));
+    printf("sendContent->wGroupCmd: %04x\nsendContent->wNodeID: %d\n", sendContent->wGroupCmd, sendContent->wNodeID);
   }
 }
 
@@ -81,43 +89,36 @@ void *recv_func(void *arg)
   while (dwExit != 0)
   {
     recv(sockfd, pRecvBuf, sizeof(struct LLC_PROTO) + sizeof(struct DATA_PROTO), 0);
-
-    if (recvLLC->protocolNo == PRIVATE_PROTOCOL && recvContent->dwGroupID = myGroupID)
+    if (recvLLC->protocolNo == PRIVATE_PROTOCOL && recvContent->dwGroupID == myGroupID)
     {
       sem_post(&sem_recv);
+      printf("recvContent->wGroupCmd: %04x\nrecvContent->wNodeID: %d\n", recvContent->wGroupCmd, recvContent->wNodeID);
     }
   }
 }
 
 int main (int argc, char **argv)
 {
-  int sockfd;
-  int dwLocalIfIndex;
-  int recvPackage;
-  int isMyPackage = 0;
-  int wNodeID = 1;
-  struct ifreq buffer;
-  unsigned char broadcastAddr[6];
-  unsigned char pLocalMAC[6];
-  struct timeval tvNetTimeout={3, 0};
-  struct sockaddr_ll devSend;
-  // char *interfaceName = "wlp112s0";
-  char *interfaceName = "wlp3s0";
-  struct LLC_PROTO *sendLLC;
-  struct DATA_PROTO *sendContent;
-  struct LLC_PROTO *recvLLC;
-  struct DATA_PROTO *recvContent;
-  char pSendBuf[MAX_SIZE];
-  char pRecvBuf[MAX_SIZE];
+	if (argv[1] == NULL)
+	{
+	  printf("ERROR: grp_ID is needed !!!\n");
+	  return -1;
+	}
+
+	if (argv[2] == NULL)
+	{
+	  printf("ERROR: status is needed !!!\n");
+	  return -1;
+	}
+	sscanf(argv[1], "%x", &myGroupID);
+  sscanf(argv[2], "%d", &status);
 
   sendLLC = (struct LLC_PROTO *)(&pSendBuf[0]);
   sendContent = (struct DATA_PROTO *)(&pSendBuf[14]);
   recvLLC = (struct LLC_PROTO *)(&pRecvBuf[0]);
   recvContent = (struct DATA_PROTO *)(&pRecvBuf[14]);
-  sendContent->wNodeID = -1;
-  sscanf(argv[1], "%x", &myGroupID);
-  sscanf(argv[2], "%d", &status);
-  time_t t;
+  unsigned char broadcastAddr[6];
+  unsigned char pLocalMAC[6];
 
   sem_init(&sem_send, 0, 0);
   sem_init(&sem_recv, 0, 0);
@@ -125,14 +126,8 @@ int main (int argc, char **argv)
   pthread_t send_pthread;
   pthread_t recv_pthread;
 
-  pthread_create(&send_pthread, NULL, send_func, &sendLLC, &sendContent);
-  pthread_create(&recv_pthread, NULL, recv_func, sockfd, &recvLLC, &recvContent);
-
-  if (argv[1] == NULL)
-  {
-    printf("grp_ID is %s\n", argv[1]);
-    return -1;
-  }
+  pthread_create(&send_pthread, NULL, send_func, NULL);
+  pthread_create(&recv_pthread, NULL, recv_func, NULL);
 
   sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
   if (sockfd == -1)
@@ -164,69 +159,70 @@ int main (int argc, char **argv)
     printf("INFO : IfIndex = %d\n", dwLocalIfIndex);
   }
 
-  broadcastAddr[0] = 0xff;
-  broadcastAddr[1] = 0xff;
-  broadcastAddr[2] = 0xff;
-  broadcastAddr[3] = 0xff;
-  broadcastAddr[4] = 0xff;
-  broadcastAddr[5] = 0xff;
+  broadcastAddr[0] = 0xFF;
+  broadcastAddr[1] = 0xFF;
+  broadcastAddr[2] = 0xFF;
+  broadcastAddr[3] = 0xFF;
+  broadcastAddr[4] = 0xFF;
+  broadcastAddr[5] = 0xFF;
   memcpy((void *)sendLLC->destMacAddr, (void *)broadcastAddr, 6);
   memcpy((void *)sendLLC->srcMacAddr, (void *)pLocalMAC, 6);
   sendLLC->protocolNo = PRIVATE_PROTOCOL;
   sendContent->dwGroupID = myGroupID;
   sendContent->dwRequestTimes = time(&t);
   sendContent->wGroupCmd = 0x0FF0;
-  printf("sendContent->dwGroupID: %04x\n", sendContent->dwGroupID);
-  printf("sendContent->dwRequestTimes: %08x\n", sendContent->dwRequestTimes);
-  printf("sendContent->wGroupCmd: %04x\n", sendContent->wGroupCmd);
+  sendContent->wNodeID = -1;
 
   bzero(&devSend, sizeof(devSend));
   devSend.sll_family = AF_PACKET;
   memcpy(devSend.sll_addr, pLocalMAC, 6);
   devSend.sll_halen = htons(6);
-  devSend.sll_ifindex = dwLocalIfIndex; // This need to be CAUSED !!!
+  devSend.sll_ifindex = dwLocalIfIndex;
 
   sem_post(&sem_send);
   while (dwExit != 0)
   {
     sem_wait(&sem_recv);
-
     switch (recvContent->wGroupCmd)
     {
       case 0x0FF0:
         if (status)
         {
-          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+        	memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
           sendContent->wGroupCmd = 0x0F01;
-          sem_post(&&sem_send);
+          sendContent->wNodeID = -1;
+          sem_post(&sem_send);
         }
         break;
       case 0x0F01:
-        if (status)
+        if (status == 1)
         {
           dwExit = 0;
+          sem_post(&sem_send);
         }
         else
         {
-          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+          memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
           sendContent->wGroupCmd = 0x00F0;
-          sem_post(&&sem_send);
+          sendContent->wNodeID = -1;
+          sem_post(&sem_send);
         }
         break;
       case 0x00F0:
         if (status)
         {
-          sendLLC->destMacAddr = recvLLC->srcMacAddr;
+          memcpy((void *)sendLLC->destMacAddr, (void *)recvLLC->srcMacAddr, 6);
           sendContent->wGroupCmd = 0x0001;
-          sendContent->wNodeID = node_ID;
+          sendContent->wNodeID = wNodeID;
           sem_post(&sem_send);
-          node_ID++;
+          wNodeID++;
         }
         break;
       case 0x0001:
-        if (!status)
+        if (status == 0)
         {
           dwExit = 0;
+          sem_post(&sem_send);
         }
         break;
     }
@@ -239,45 +235,6 @@ int main (int argc, char **argv)
   sem_destroy(&sem_recv);
 
   close(sockfd);
-	return 0;
-}
-
-int isServerPackage (int protocolNo, int dwGroupID, int wGroupCmd)
-{
-  if (protocolNo != PRIVATE_PROTOCOL)
-  {
-    return 0;
-  }
-
-  if (dwGroupID != myGroupID)
-  {
-    return 0;
-  }
-
-  if (wGroupCmd != 0x0FF0 && wGroupCmd != 0x0F01)
-  {
-    return 0;
-  }
-
-  return 1;
-}
-
-int isClientPackage (int protocolNo, int dwGroupID, int wGroupCmd)
-{
-  if (protocolNo != PRIVATE_PROTOCOL)
-  {
-    return 0;
-  }
-
-  if (dwGroupID != myGroupID)
-  {
-    return 0;
-  }
-
-  if (wGroupCmd != 0x00F0 && wGroupCmd != 0x0001)
-  {
-    return 0;
-  }
-
-  return 1;
+  
+  return 0;
 }
